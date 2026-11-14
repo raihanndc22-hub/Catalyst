@@ -1,0 +1,27 @@
+name: Build Catalyst APK
+on:
+  push:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Unzip the project
+        run: |
+          unzip -q -o "$(ls *.zip | head -n 1)" -d unzipped
+          curl -fsSL -o unzipped/catalyst-android/app/src/main/assets/www/pdf-lib.min.js https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js || true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Build the APK
+        working-directory: unzipped/catalyst-android
+        run: gradle assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Catalyst-apk
+          path: unzipped/catalyst-android/app/build/outputs/apk/debug/app-debug.apk
