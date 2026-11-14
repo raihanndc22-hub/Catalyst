@@ -28,13 +28,28 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Build the APK
+      - name: Prepare the private signing key
+        env:
+          KS: ${{ secrets.CATALYST_KEYSTORE_B64 }}
+          PW: ${{ secrets.CATALYST_PASSWORD }}
+        run: |
+          if [ -z "$KS" ] || [ -z "$PW" ]; then echo "::error::Add the CATALYST_KEYSTORE_B64 and CATALYST_PASSWORD secrets in Settings > Secrets and variables > Actions"; exit 1; fi
+          echo "$KS" | tr -d ' \n\r' | base64 -d > "$RUNNER_TEMP/catalyst-release.jks"
+      - name: Build the release APK and Play Store bundle
         working-directory: unzipped/catalyst-android
-        run: gradle assembleDebug --no-daemon
+        env:
+          CATALYST_KEYSTORE: ${{ runner.temp }}/catalyst-release.jks
+          CATALYST_PASSWORD: ${{ secrets.CATALYST_PASSWORD }}
+        run: |
+          gradle assembleRelease bundleRelease --no-daemon
+          mkdir -p ../out
+          cp app/build/outputs/apk/release/app-release.apk ../out/Catalyst.apk
+          cp app/build/outputs/bundle/release/app-release.aab ../out/Catalyst-PlayStore.aab
+          rm -f "$CATALYST_KEYSTORE"
       - uses: actions/upload-artifact@v4
         with:
-          name: Catalyst-apk
-          path: unzipped/catalyst-android/app/build/outputs/apk/debug/app-debug.apk
+          name: Catalyst-release
+          path: unzipped/out/
       - uses: actions/upload-pages-artifact@v3
         with:
           path: unzipped/catalyst-android/app/src/main/assets/www
