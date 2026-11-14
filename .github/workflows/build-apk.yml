@@ -2,15 +2,25 @@ name: Build Catalyst APK
 on:
   push:
   workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel-in-progress: false
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Unzip the project
+      - name: Unzip the project and add offline libraries
         run: |
           unzip -q -o "$(ls *.zip | head -n 1)" -d unzipped
-          curl -fsSL -o unzipped/catalyst-android/app/src/main/assets/www/pdf-lib.min.js https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js || true
+          W=unzipped/catalyst-android/app/src/main/assets/www
+          curl -fsSL -o $W/pdf-lib.min.js https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js || true
+          mkdir -p $W/fb
+          for n in app auth firestore; do curl -fsSL -o $W/fb/firebase-$n-compat.js https://www.gstatic.com/firebasejs/10.12.2/firebase-$n-compat.js || true; done
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -25,3 +35,15 @@ jobs:
         with:
           name: Catalyst-apk
           path: unzipped/catalyst-android/app/build/outputs/apk/debug/app-debug.apk
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: unzipped/catalyst-android/app/src/main/assets/www
+  website:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4
